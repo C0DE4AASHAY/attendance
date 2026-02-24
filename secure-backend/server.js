@@ -34,7 +34,7 @@ app.use(cors({
 app.use('/api/v1/attendance', attendanceRoutes);
 
 // Unhandled Route Handler
-app.all('*', (req, res) => {
+app.use((req, res) => {
     res.status(404).json({
         status: 'error',
         message: `Can't find ${req.originalUrl} on this secure server.`

@@ -33,6 +33,15 @@ app.use(cors({
 // Routes
 app.use('/api/v1/attendance', attendanceRoutes);
 
+// Health check root endpoint
+app.get('/', (req, res) => {
+    res.status(200).json({
+        status: 'success',
+        message: 'AttendX Secure API is Live & Running!',
+        version: '1.0.0'
+    });
+});
+
 // Unhandled Route Handler
 app.use((req, res) => {
     res.status(404).json({

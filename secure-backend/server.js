@@ -1,9 +1,11 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet'); // Helps secure Express apps with various HTTP headers
 const { apiRateLimiter } = require('./middleware/security');
 const attendanceRoutes = require('./routes/attendanceRoutes');
+
+// Verify Supabase Config exists before starting
+require('./config/supabaseClient');
 
 const app = express();
 
@@ -39,18 +41,10 @@ app.all('*', (req, res) => {
     });
 });
 
-// Database connection & Server initialization
+// Server initialization (No MongoDB connection required anymore!)
 const PORT = process.env.PORT || 5000;
-const DB_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/attendance_secure';
 
-mongoose.connect(DB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-}).then(() => {
-    console.log('MongoDB Secure Connection Successful');
-    app.listen(PORT, () => {
-        console.log(`Secure server running on port ${PORT}...`);
-    });
-}).catch(err => {
-    console.error('Database connection error:', err);
+app.listen(PORT, () => {
+    console.log(`Secure server running (Supabase Integration) on port ${PORT}...`);
+    console.log(`Requires: SUPABASE_URL and SUPABASE_ANON_KEY in .env file`);
 });

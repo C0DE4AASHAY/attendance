@@ -1,5 +1,4 @@
-const Attendance = require('../models/Attendance');
-const Session = require('../models/Session');
+const supabase = require('../config/supabaseClient');
 
 // Mark attendance
 exports.markAttendance = async (req, res) => {
@@ -13,10 +12,14 @@ exports.markAttendance = async (req, res) => {
         console.log(`[ATTENDANCE ATTEMPT] IP: ${ipAddress} | Student: ${studentId} | Session: ${sessionId}`);
 
         // 3️⃣ QR Code Session Security (Backend Validation)
-        const activeSession = await Session.findOne({ sessionId: sessionId });
+        const { data: activeSession, error: sessionError } = await supabase
+            .from('sessions')
+            .select('*')
+            .eq('sessionId', sessionId)
+            .single();
 
         // Check if session exists
-        if (!activeSession) {
+        if (sessionError || !activeSession) {
             return res.status(404).json({
                 status: 'error',
                 message: 'Invalid Session ID. This session does not exist.'
@@ -32,7 +35,13 @@ exports.markAttendance = async (req, res) => {
         }
 
         // 2️⃣ Duplicate Student ID Protection
-        const existingStudent = await Attendance.findOne({ studentId, sessionId });
+        const { data: existingStudent, error: studentError } = await supabase
+            .from('attendance')
+            .select('id')
+            .eq('studentId', studentId)
+            .eq('sessionId', sessionId)
+            .maybeSingle();
+
         if (existingStudent) {
             return res.status(409).json({
                 status: 'error',
@@ -41,7 +50,13 @@ exports.markAttendance = async (req, res) => {
         }
 
         // 1️⃣ IP-Based Restriction (One IP per session = One vote per session)
-        const existingIP = await Attendance.findOne({ ipAddress: ipAddress, sessionId: sessionId });
+        const { data: existingIP, error: ipError } = await supabase
+            .from('attendance')
+            .select('id')
+            .eq('ipAddress', ipAddress)
+            .eq('sessionId', sessionId)
+            .maybeSingle();
+
         if (existingIP) {
             return res.status(429).json({
                 status: 'error',
@@ -49,36 +64,41 @@ exports.markAttendance = async (req, res) => {
             });
         }
 
-        // 5️⃣ Store Data in MongoDB
-        const attendanceRecord = new Attendance({
-            studentId,
-            studentName,
-            sessionId,
-            ipAddress,
-            userAgent,
-            deviceFingerprint // Optional layer for fingerprint tracking
-        });
+        // 5️⃣ Store Data in Supabase
+        const { data: attendanceRecord, error: insertError } = await supabase
+            .from('attendance')
+            .insert([
+                {
+                    studentId,
+                    studentName,
+                    sessionId,
+                    ipAddress,
+                    userAgent,
+                    deviceFingerprint // Optional layer for fingerprint tracking
+                }
+            ])
+            .select();
 
-        await attendanceRecord.save();
+        if (insertError) {
+            throw insertError;
+        }
 
         return res.status(201).json({
             status: 'success',
             message: 'Attendance securely logged!',
             data: {
-                studentId: attendanceRecord.studentId,
-                sessionId: attendanceRecord.sessionId,
+                studentId: attendanceRecord[0].studentId,
+                sessionId: attendanceRecord[0].sessionId,
             }
         });
 
     } catch (error) {
         console.error(`[ATTENDANCE ERROR] ${error.message}`);
-        // If we're relying entirely on DB indices (MongoDB enforcing unique IP & student ID constraints natively)
-        if (error.code === 11000) {
-            if (error.message.includes('studentId_1_sessionId_1')) {
-                return res.status(409).json({ status: 'error', message: 'Attendance already marked for this Student ID.' });
-            } else if (error.message.includes('ipAddress_1_sessionId_1')) {
-                return res.status(429).json({ status: 'error', message: 'You have already marked your attendance.' });
-            }
+        // Handle specific Supabase unique constraint errors (e.g. 23505) if db triggers first
+        if (error.code === '23505') {
+            // Note: To map specific constraints perfectly, we usually rely on the explicit selects above, 
+            // but as a fallback, we catch the unique violation.
+            return res.status(409).json({ status: 'error', message: 'Attendance already marked (Database unique constraint).' });
         }
 
         return res.status(500).json({ status: 'error', message: 'Server error while processing attendance.' });

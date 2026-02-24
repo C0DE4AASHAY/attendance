@@ -2,9 +2,14 @@ import { SignJWT, jwtVerify } from 'jose';
 import { hashSync, compareSync } from 'bcryptjs';
 import { cookies } from 'next/headers';
 
-const JWT_SECRET = new TextEncoder().encode(
-    process.env.JWT_SECRET || 'attendance-tracker-super-secret-key-2024'
-);
+
+const secret = process.env.JWT_SECRET;
+if (!secret) {
+    throw new Error("JWT_SECRET environment variable is not set!");
+}
+const JWT_SECRET = new TextEncoder().encode(secret);
+
+
 
 export async function createToken(userId: string, email: string, name: string): Promise<string> {
     return new SignJWT({ userId, email, name })

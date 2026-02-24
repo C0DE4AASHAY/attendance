@@ -26,10 +26,14 @@ app.use(express.json({ limit: '10kb' }));
 
 // 5. Cross-Origin Resource Sharing (Optional: restrict to your specific frontend URL)
 app.use(cors({
-    origin: '*', // Allows all domains. For strict security, use: ['http://localhost:3000', 'https://your-vercel-app.vercel.app']
+    // Replace with your actual production URL
+    origin: process.env.NODE_ENV === 'production' 
+        ? 'https://attendance-fawn-alpha.vercel.app' 
+        : 'http://localhost:3000',
     methods: ['POST', 'GET', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 
 // Routes
 app.use('/api/v1/attendance', attendanceRoutes);
@@ -58,3 +62,5 @@ app.listen(PORT, () => {
     console.log(`Secure server running (Supabase Integration) on port ${PORT}...`);
     console.log(`Requires: SUPABASE_URL and SUPABASE_ANON_KEY in .env file`);
 });
+
+

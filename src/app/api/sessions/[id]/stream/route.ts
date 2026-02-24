@@ -27,8 +27,8 @@ export async function GET(
                 const { data } = await supabase
                     .from('attendees')
                     .select('*')
-                    .eq('sessionId', params.id)
-                    .order('timestamp', { ascending: false });
+                    .eq('session_id', params.id)
+                    .order('marked_at', { ascending: false });
                 return data || [];
             };
 

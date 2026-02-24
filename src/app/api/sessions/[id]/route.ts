@@ -9,10 +9,21 @@ export async function GET(
     const session = await getSessionById(params.id);
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
 
-    // Assuming we still want to list attendees, though Next.js doesn't write attendees directly anymore
-    const { count: getAttendeeCount } = require('@/lib/db'); // or import at top
-    const attendeeCount = await getAttendeeCount(params.id);
-    return NextResponse.json({ session, attendees: { count: attendeeCount } });
+    // The dashboard frontend relies on an array of attendees to map over. 
+    // We must return the actual rows, not just a count object.
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    );
+
+    const { data: attendeesList } = await supabase
+        .from('attendees')
+        .select('*')
+        .eq('session_id', params.id)
+        .order('marked_at', { ascending: false });
+
+    return NextResponse.json({ session, attendees: attendeesList || [] });
 }
 
 export async function PATCH(

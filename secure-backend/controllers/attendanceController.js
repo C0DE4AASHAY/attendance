@@ -13,9 +13,9 @@ exports.markAttendance = async (req, res) => {
 
         // 3️⃣ QR Code Session Security (Backend Validation)
         const { data: activeSession, error: sessionError } = await supabase
-            .from('sessions')
+            .from('sessions_dashboard')
             .select('*')
-            .eq('sessionId', sessionId)
+            .eq('id', sessionId)
             .single();
 
         // Check if session exists
@@ -27,19 +27,22 @@ exports.markAttendance = async (req, res) => {
         }
 
         // Check if QR code / session is expired (5-10 minutes constraint)
-        if (new Date() > new Date(activeSession.expiresAt)) {
+        if (activeSession.expires_at && new Date() > new Date(activeSession.expires_at)) {
             return res.status(403).json({
                 status: 'error',
                 message: 'QR code expired. Please scan a new code.'
             });
         }
 
-        // 2️⃣ Duplicate Student ID Protection
+        // Next.js frontend table now expects `session_id` instead of `sessionId`
+        // 2️⃣ Duplicate Student ID Protection & 1️⃣ IP-Based Restriction
+        // Note: For full IP limits, we would need to add an IP address column to the attendees table, but for now we enforce student_id uniqueness
+
         const { data: existingStudent, error: studentError } = await supabase
-            .from('attendance')
+            .from('attendees')
             .select('id')
-            .eq('studentId', studentId)
-            .eq('sessionId', sessionId)
+            .eq('student_id', studentId)
+            .eq('session_id', sessionId)
             .maybeSingle();
 
         if (existingStudent) {
@@ -49,32 +52,15 @@ exports.markAttendance = async (req, res) => {
             });
         }
 
-        // 1️⃣ IP-Based Restriction (One IP per session = One vote per session)
-        const { data: existingIP, error: ipError } = await supabase
-            .from('attendance')
-            .select('id')
-            .eq('ipAddress', ipAddress)
-            .eq('sessionId', sessionId)
-            .maybeSingle();
-
-        if (existingIP) {
-            return res.status(429).json({
-                status: 'error',
-                message: 'You have already marked your attendance.' // Protect against proxy IP cheating
-            });
-        }
-
         // 5️⃣ Store Data in Supabase
         const { data: attendanceRecord, error: insertError } = await supabase
-            .from('attendance')
+            .from('attendees')
             .insert([
                 {
-                    studentId,
-                    studentName,
-                    sessionId,
-                    ipAddress,
-                    userAgent,
-                    deviceFingerprint // Optional layer for fingerprint tracking
+                    student_id: studentId,
+                    student_name: studentName,
+                    session_id: sessionId,
+                    // Note: If you want strict IP limitation you'd need to add `ipAddress` to the attendees schema.
                 }
             ])
             .select();

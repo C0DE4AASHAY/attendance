@@ -11,13 +11,13 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 });
         }
 
-        const existing = getUserByEmail(email);
+        const existing = await getUserByEmail(email);
         if (existing) {
             return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
         }
 
         const hashed = hashPassword(password);
-        const user = createUser(uuid(), name, email, hashed);
+        const user = await createUser(uuid(), name, email, hashed);
         const token = await createToken(user.id, user.email, user.name);
 
         const response = NextResponse.json({

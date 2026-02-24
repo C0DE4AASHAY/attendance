@@ -1,53 +1,14 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 
-const DB_PATH = path.join(process.cwd(), 'attendance.db');
+// Initialize Supabase Client for Frontend Next.js API
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-let db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-    if (!db) {
-        db = new Database(DB_PATH);
-        db.pragma('journal_mode = WAL');
-        db.pragma('foreign_keys = ON');
-        initTables(db);
-    }
-    return db;
+if (!supabaseUrl || !supabaseKey) {
+    console.warn("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.");
 }
 
-function initTables(db: Database.Database) {
-    db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'teacher',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      description TEXT DEFAULT '',
-      creator_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
-      expires_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS attendees (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      student_name TEXT NOT NULL,
-      student_id TEXT NOT NULL,
-      marked_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
-      UNIQUE(session_id, student_id)
-    );
-  `);
-}
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- User helpers ---
 export interface User {
@@ -59,20 +20,43 @@ export interface User {
     created_at: string;
 }
 
-export function createUser(id: string, name: string, email: string, hashedPassword: string): User {
-    const db = getDb();
-    db.prepare(
-        'INSERT INTO users (id, name, email, password) VALUES (?, ?, ?, ?)'
-    ).run(id, name, email, hashedPassword);
-    return db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User;
+export async function createUser(id: string, name: string, email: string, hashedPassword: string): Promise<User> {
+    const { data, error } = await supabase
+        .from('users')
+        .insert([{ id, name, email, password: hashedPassword, role: 'teacher' }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data as User;
 }
 
-export function getUserByEmail(email: string): User | undefined {
-    return getDb().prepare('SELECT * FROM users WHERE email = ?').get(email) as User | undefined;
+export async function getUserByEmail(email: string): Promise<User | undefined> {
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Supabase getUserByEmail error:', error);
+        return undefined;
+    }
+    return data || undefined;
 }
 
-export function getUserById(id: string): User | undefined {
-    return getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
+export async function getUserById(id: string): Promise<User | undefined> {
+    const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Supabase getUserById error:', error);
+        return undefined;
+    }
+    return data || undefined;
 }
 
 // --- Session helpers ---
@@ -86,28 +70,68 @@ export interface Session {
     created_at: string;
 }
 
-export function createSession(id: string, title: string, description: string, creatorId: string, expiresAt: string | null): Session {
-    const db = getDb();
-    db.prepare(
-        'INSERT INTO sessions (id, title, description, creator_id, expires_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(id, title, description, creatorId, expiresAt);
-    return db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Session;
+export async function createSession(id: string, title: string, description: string, creatorId: string, expiresAt: string | null): Promise<Session> {
+    const { data, error } = await supabase
+        .from('sessions_dashboard') // Different from your backend table just for Next.js dashboards
+        .insert([{
+            id,
+            title,
+            description,
+            creator_id: creatorId,
+            expires_at: expiresAt,
+            status: 'active'
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data as Session;
 }
 
-export function getSessionsByCreator(creatorId: string): Session[] {
-    return getDb().prepare('SELECT * FROM sessions WHERE creator_id = ? ORDER BY created_at DESC').all(creatorId) as Session[];
+export async function getSessionsByCreator(creatorId: string): Promise<Session[]> {
+    const { data, error } = await supabase
+        .from('sessions_dashboard')
+        .select('*')
+        .eq('creator_id', creatorId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('Supabase getSessionsByCreator error:', error);
+        return [];
+    }
+    return data || [];
 }
 
-export function getSessionById(id: string): Session | undefined {
-    return getDb().prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Session | undefined;
+export async function getSessionById(id: string): Promise<Session | undefined> {
+    const { data, error } = await supabase
+        .from('sessions_dashboard')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+    if (error) {
+        console.error('Supabase getSessionById error:', error);
+        return undefined;
+    }
+    return data || undefined;
 }
 
-export function updateSessionStatus(id: string, status: string) {
-    getDb().prepare('UPDATE sessions SET status = ? WHERE id = ?').run(status, id);
+export async function updateSessionStatus(id: string, status: string): Promise<void> {
+    const { error } = await supabase
+        .from('sessions_dashboard')
+        .update({ status })
+        .eq('id', id);
+
+    if (error) throw error;
 }
 
-export function deleteSession(id: string) {
-    getDb().prepare('DELETE FROM sessions WHERE id = ?').run(id);
+export async function deleteSession(id: string): Promise<void> {
+    const { error } = await supabase
+        .from('sessions_dashboard')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
 }
 
 // --- Attendee helpers ---
@@ -119,62 +143,83 @@ export interface Attendee {
     marked_at: string;
 }
 
-export function markAttendance(id: string, sessionId: string, studentName: string, studentId: string): Attendee {
-    const db = getDb();
-    db.prepare(
-        'INSERT INTO attendees (id, session_id, student_name, student_id) VALUES (?, ?, ?, ?)'
-    ).run(id, sessionId, studentName, studentId);
-    return db.prepare('SELECT * FROM attendees WHERE id = ?').get(id) as Attendee;
-}
+// The dashboard creates local attendees, but external security checks happen differently.
+export async function getAttendeeCount(sessionId: string): Promise<number> {
+    const { count, error } = await supabase
+        .from('attendees')
+        .select('*', { count: 'exact', head: true })
+        .eq('session_id', sessionId);
 
-export function getAttendeesBySession(sessionId: string): Attendee[] {
-    return getDb().prepare('SELECT * FROM attendees WHERE session_id = ? ORDER BY marked_at DESC').all(sessionId) as Attendee[];
-}
-
-export function getAttendeeCount(sessionId: string): number {
-    const row = getDb().prepare('SELECT COUNT(*) as count FROM attendees WHERE session_id = ?').get(sessionId) as { count: number };
-    return row.count;
-}
-
-export function isAlreadyMarked(sessionId: string, studentId: string): boolean {
-    const row = getDb().prepare('SELECT id FROM attendees WHERE session_id = ? AND student_id = ?').get(sessionId, studentId);
-    return !!row;
+    if (error) return 0;
+    return count || 0;
 }
 
 // --- Analytics helpers ---
-export function getTotalSessions(creatorId: string): number {
-    const row = getDb().prepare('SELECT COUNT(*) as count FROM sessions WHERE creator_id = ?').get(creatorId) as { count: number };
-    return row.count;
+export async function getTotalSessions(creatorId: string): Promise<number> {
+    const { count, error } = await supabase
+        .from('sessions_dashboard')
+        .select('*', { count: 'exact', head: true })
+        .eq('creator_id', creatorId);
+
+    if (error) return 0;
+    return count || 0;
 }
 
-export function getTotalAttendees(creatorId: string): number {
-    const row = getDb().prepare(`
-    SELECT COUNT(*) as count FROM attendees a 
-    JOIN sessions s ON a.session_id = s.id 
-    WHERE s.creator_id = ?
-  `).get(creatorId) as { count: number };
-    return row.count;
+// Helper to manually aggregate relations in Supabase
+export async function getTotalAttendees(creatorId: string): Promise<number> {
+    // 1. Get all session IDs for this creator
+    const sessions = await getSessionsByCreator(creatorId);
+    if (!sessions.length) return 0;
+
+    const sessionIds = sessions.map(s => s.id);
+
+    // 2. Count attendees in those sessions
+    const { count, error } = await supabase
+        .from('attendees')
+        .select('*', { count: 'exact', head: true })
+        .in('session_id', sessionIds);
+
+    if (error) return 0;
+    return count || 0;
 }
 
-export function getSessionsWithCounts(creatorId: string): (Session & { attendee_count: number })[] {
-    return getDb().prepare(`
-    SELECT s.*, COUNT(a.id) as attendee_count 
-    FROM sessions s 
-    LEFT JOIN attendees a ON s.id = a.session_id 
-    WHERE s.creator_id = ? 
-    GROUP BY s.id 
-    ORDER BY s.created_at DESC
-  `).all(creatorId) as (Session & { attendee_count: number })[];
+export async function getSessionsWithCounts(creatorId: string): Promise<(Session & { attendee_count: number })[]> {
+    const sessions = await getSessionsByCreator(creatorId);
+    const sessionsWithCounts = [];
+
+    // Map manually due to NoSQL-like behavior in basic API calls
+    for (const session of sessions) {
+        const count = await getAttendeeCount(session.id);
+        sessionsWithCounts.push({ ...session, attendee_count: count });
+    }
+
+    return sessionsWithCounts;
 }
 
-export function getDailyAttendanceTrend(creatorId: string): { date: string; count: number }[] {
-    return getDb().prepare(`
-    SELECT DATE(a.marked_at) as date, COUNT(*) as count 
-    FROM attendees a 
-    JOIN sessions s ON a.session_id = s.id 
-    WHERE s.creator_id = ? 
-    GROUP BY DATE(a.marked_at) 
-    ORDER BY date DESC 
-    LIMIT 14
-  `).all(creatorId) as { date: string; count: number }[];
+export async function getDailyAttendanceTrend(creatorId: string): Promise<{ date: string; count: number }[]> {
+    // Basic aggregation proxy since group by isn't easily exposed in JS client without RPC
+    const sessions = await getSessionsByCreator(creatorId);
+    if (!sessions.length) return [];
+    const sessionIds = sessions.map(s => s.id);
+
+    const { data: attendees, error } = await supabase
+        .from('attendees')
+        .select('marked_at')
+        .in('session_id', sessionIds)
+        .order('marked_at', { ascending: false });
+
+    if (error || !attendees) return [];
+
+    const trendMap: Record<string, number> = {};
+
+    attendees.forEach(a => {
+        const dateStr = new Date(a.marked_at).toISOString().split('T')[0];
+        trendMap[dateStr] = (trendMap[dateStr] || 0) + 1;
+    });
+
+    const result = Object.entries(trendMap)
+        .map(([date, count]) => ({ date, count }))
+        .slice(0, 14);
+
+    return result;
 }

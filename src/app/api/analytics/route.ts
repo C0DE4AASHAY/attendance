@@ -6,10 +6,12 @@ export async function GET() {
     const user = await getAuthUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const totalSessions = getTotalSessions(user.userId);
-    const totalAttendees = getTotalAttendees(user.userId);
-    const sessions = getSessionsWithCounts(user.userId);
-    const dailyTrend = getDailyAttendanceTrend(user.userId);
+    const [totalSessions, totalAttendees, sessions, dailyTrend] = await Promise.all([
+        getTotalSessions(user.userId),
+        getTotalAttendees(user.userId),
+        getSessionsWithCounts(user.userId),
+        getDailyAttendanceTrend(user.userId)
+    ]);
 
     const activeSessions = sessions.filter(s => s.status === 'active').length;
     const avgAttendance = totalSessions > 0 ? Math.round(totalAttendees / totalSessions) : 0;

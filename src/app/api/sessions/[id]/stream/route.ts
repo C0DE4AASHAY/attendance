@@ -1,30 +1,51 @@
 import { NextRequest } from 'next/server';
-import { getAttendeesBySession, getSessionById } from '@/lib/db';
+import { getSessionById } from '@/lib/db';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
 
 export async function GET(
     _request: NextRequest,
     { params }: { params: { id: string } }
 ) {
-    const session = getSessionById(params.id);
+    const session = await getSessionById(params.id);
     if (!session) {
         return new Response('Session not found', { status: 404 });
     }
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
-        start(controller) {
-            // Send initial attendees
-            const attendees = getAttendeesBySession(params.id);
-            controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: 'init', attendees })}\n\n`)
-            );
+        async start(controller) {
 
-            // Poll for updates every 2 seconds
-            const interval = setInterval(() => {
+            // Helper function to fetch latest attendees
+            const fetchAttendees = async () => {
+                const { data } = await supabase
+                    .from('attendees')
+                    .select('*')
+                    .eq('sessionId', params.id)
+                    .order('timestamp', { ascending: false });
+                return data || [];
+            };
+
+            // Send initial attendees
+            try {
+                const attendees = await fetchAttendees();
+                controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ type: 'init', attendees })}\n\n`)
+                );
+            } catch (err) {
+                console.error("Stream init error", err);
+            }
+
+            // Poll for updates every 3 seconds (async safe for Supabase)
+            const interval = setInterval(async () => {
                 try {
-                    const currentAttendees = getAttendeesBySession(params.id);
+                    const currentAttendees = await fetchAttendees();
                     controller.enqueue(
                         encoder.encode(`data: ${JSON.stringify({ type: 'update', attendees: currentAttendees })}\n\n`)
                     );
@@ -32,7 +53,7 @@ export async function GET(
                     clearInterval(interval);
                     controller.close();
                 }
-            }, 2000);
+            }, 3000);
 
             // Clean up on close
             _request.signal.addEventListener('abort', () => {
@@ -47,6 +68,7 @@ export async function GET(
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
         },
     });
 }

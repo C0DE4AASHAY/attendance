@@ -43,22 +43,33 @@ export default function AttendPage() {
         setSubmitting(true);
 
         try {
-            const res = await fetch(`/api/sessions/${sessionId}/attend`, {
+            const API_URL = process.env.NEXT_PUBLIC_SECURE_API_URL || 'http://localhost:5000';
+
+            // Generate basic frontend fingerprint
+            const rawFingerprint = navigator.userAgent + (window.screen ? window.screen.width : '');
+            const deviceFingerprint = btoa(rawFingerprint);
+
+            const res = await fetch(`${API_URL}/api/v1/attendance/mark`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentName, studentId }),
+                body: JSON.stringify({
+                    studentName,
+                    studentId,
+                    sessionId,
+                    deviceFingerprint
+                }),
             });
 
             const data = await res.json();
 
             if (!res.ok) {
-                setError(data.error || 'Failed to mark attendance');
+                setError(data.message || data.error || 'Failed to mark attendance');
                 return;
             }
 
             setSuccess(true);
         } catch {
-            setError('Network error. Please try again.');
+            setError('Network error. Please try again or check if the secure backend is running.');
         } finally {
             setSubmitting(false);
         }

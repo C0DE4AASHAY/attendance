@@ -60,16 +60,18 @@ export default function AttendPage() {
                 }),
             });
 
-            const data = await res.json();
+            // Parse response body safely whether success or error
+            const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
-                setError(data.message || data.error || 'Failed to mark attendance');
-                return;
+                setError(data.message || data.error || 'Failed to mark attendance. Session may be invalid or you already scanned it.');
+                return; // Stop execution, do NOT set success
             }
 
             setSuccess(true);
-        } catch {
-            setError('Network error. Please try again or check if the secure backend is running.');
+        } catch (err) {
+            console.error(err);
+            setError('Network error. Ensure you are connected and the session is active.');
         } finally {
             setSubmitting(false);
         }

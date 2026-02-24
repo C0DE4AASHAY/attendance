@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { GoogleLogin } from '@react-oauth/google';
 
 export default function LoginPage() {
     const [isRegister, setIsRegister] = useState(false);
@@ -45,6 +46,31 @@ export default function LoginPage() {
         }
     };
 
+    const handleGoogleSuccess = async (credentialResponse: any) => {
+        setError('');
+        setLoading(true);
+        try {
+            const res = await fetch('/api/auth/google', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ credential: credentialResponse.credential }),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                setError(data.error || 'Google login failed');
+                return;
+            }
+
+            router.push('/dashboard');
+        } catch {
+            setError('Network error during Google login.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="auth-page">
             <div className="auth-card">
@@ -61,6 +87,23 @@ export default function LoginPage() {
                 </p>
 
                 {error && <div className="alert alert-error">{error}</div>}
+
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+                    <GoogleLogin
+                        onSuccess={handleGoogleSuccess}
+                        onError={() => setError('Google login failed')}
+                        theme="outline"
+                        size="large"
+                        width="100%"
+                        text={isRegister ? "signup_with" : "signin_with"}
+                    />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: 'var(--text-secondary)' }}>
+                    <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-color)' }}></div>
+                    <span style={{ padding: '0 10px', fontSize: '0.9rem' }}>Or continue with email</span>
+                    <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--border-color)' }}></div>
+                </div>
 
                 <form onSubmit={handleSubmit}>
                     {isRegister && (

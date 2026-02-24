@@ -26,8 +26,9 @@ app.use(express.json({ limit: '10kb' }));
 
 // 5. Cross-Origin Resource Sharing (Optional: restrict to your specific frontend URL)
 app.use(cors({
-    origin: '*', // For production, replace '*' with your frontend URL like 'https://my-attendance-app.vercel.app'
-    methods: ['POST', 'GET']
+    origin: '*', // Allows all domains. For strict security, use: ['http://localhost:3000', 'https://your-vercel-app.vercel.app']
+    methods: ['POST', 'GET', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Routes

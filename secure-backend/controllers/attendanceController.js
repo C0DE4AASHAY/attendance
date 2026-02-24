@@ -20,6 +20,7 @@ exports.markAttendance = async (req, res) => {
 
         // Check if session exists
         if (sessionError || !activeSession) {
+            console.error("Session lookup error:", sessionError || "Not found");
             return res.status(404).json({
                 status: 'error',
                 message: 'Invalid Session ID. This session does not exist.'
@@ -53,10 +54,12 @@ exports.markAttendance = async (req, res) => {
         }
 
         // 5️⃣ Store Data in Supabase
+        const { v4: uuidv4 } = require('uuid');
         const { data: attendanceRecord, error: insertError } = await supabase
             .from('attendees')
             .insert([
                 {
+                    id: uuidv4(),
                     student_id: studentId,
                     student_name: studentName,
                     session_id: sessionId,
@@ -66,6 +69,7 @@ exports.markAttendance = async (req, res) => {
             .select();
 
         if (insertError) {
+            console.error("Insert error attendance:", insertError);
             throw insertError;
         }
 
@@ -73,8 +77,8 @@ exports.markAttendance = async (req, res) => {
             status: 'success',
             message: 'Attendance securely logged!',
             data: {
-                studentId: attendanceRecord[0].studentId,
-                sessionId: attendanceRecord[0].sessionId,
+                studentId: attendanceRecord[0].student_id,
+                sessionId: attendanceRecord[0].session_id,
             }
         });
 

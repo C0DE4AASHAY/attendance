@@ -24,12 +24,23 @@ app.use(apiRateLimiter);
 // 4. Parse incoming JSON requests and limit size to prevent payload abuse
 app.use(express.json({ limit: '10kb' }));
 
-// 5. Cross-Origin Resource Sharing (Optional: restrict to your specific frontend URL)
+// 5. Cross-Origin Resource Sharing — configured via CORS_ORIGIN env var
+// Set CORS_ORIGIN on Render to your Vercel URL (e.g. https://attendance-fawn-alpha.vercel.app)
+// You can also set multiple origins separated by commas
+const allowedOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+    : (process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3000']);
+
 app.use(cors({
-    // Replace with your actual production URL
-    origin: process.env.NODE_ENV === 'production' 
-        ? 'https://attendance-fawn-alpha.vercel.app' 
-        : 'http://localhost:3000',
+    origin: function (origin, callback) {
+        // Allow requests with no origin (mobile apps, curl, Postman, server-to-server)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        console.warn(`CORS blocked request from origin: ${origin}`);
+        return callback(new Error('Not allowed by CORS'));
+    },
     methods: ['POST', 'GET', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));

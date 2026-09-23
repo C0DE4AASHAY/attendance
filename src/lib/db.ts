@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase Client for Frontend Next.js API
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key';
 
-if (!supabaseUrl || !supabaseKey) {
-    console.warn("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.");
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.warn("Warning: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variables.");
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -152,6 +152,20 @@ export async function getAttendeeCount(sessionId: string): Promise<number> {
 
     if (error) return 0;
     return count || 0;
+}
+
+export async function getAttendeesBySession(sessionId: string): Promise<Attendee[]> {
+    const { data, error } = await supabase
+        .from('attendees')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('marked_at', { ascending: false });
+
+    if (error) {
+        console.error('Supabase getAttendeesBySession error:', error);
+        return [];
+    }
+    return (data as Attendee[]) || [];
 }
 
 // --- Analytics helpers ---

@@ -7,17 +7,22 @@ out/
 
 # database
 *.db
+*.db-shm
+*.db-wal
 
 # env
 .env
 .env.local
 .env.production
+secure-backend/.env
 
 # misc
 .DS_Store
 *.pem
 npm-debug.log*
+secure-backend/node_modules/
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+

@@ -3,11 +3,19 @@ import { hashSync, compareSync } from 'bcryptjs';
 import { cookies } from 'next/headers';
 
 
-const secret = process.env.JWT_SECRET;
-if (!secret) {
-    throw new Error("JWT_SECRET environment variable is not set!");
+// Lazy initialization — deferred to runtime so the build doesn't crash
+// when JWT_SECRET is not yet set in the environment.
+let _jwtSecret: Uint8Array | null = null;
+function getJWTSecret(): Uint8Array {
+    if (!_jwtSecret) {
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            throw new Error("JWT_SECRET environment variable is not set!");
+        }
+        _jwtSecret = new TextEncoder().encode(secret);
+    }
+    return _jwtSecret;
 }
-const JWT_SECRET = new TextEncoder().encode(secret);
 
 
 
@@ -16,12 +24,12 @@ export async function createToken(userId: string, email: string, name: string): 
         .setProtectedHeader({ alg: 'HS256' })
         .setExpirationTime('7d')
         .setIssuedAt()
-        .sign(JWT_SECRET);
+        .sign(getJWTSecret());
 }
 
 export async function verifyToken(token: string): Promise<{ userId: string; email: string; name: string } | null> {
     try {
-        const { payload } = await jwtVerify(token, JWT_SECRET);
+        const { payload } = await jwtVerify(token, getJWTSecret());
         return payload as unknown as { userId: string; email: string; name: string };
     } catch {
         return null;

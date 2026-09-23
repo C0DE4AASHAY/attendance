@@ -1,19 +1,14 @@
 import { NextRequest } from 'next/server';
-import { getSessionById } from '@/lib/db';
-import { createClient } from '@supabase/supabase-js';
+import { getSessionById, getAttendeesBySession } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-);
-
 export async function GET(
     _request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
-    const session = await getSessionById(params.id);
+    const { id } = await params;
+    const session = await getSessionById(id);
     if (!session) {
         return new Response('Session not found', { status: 404 });
     }
@@ -24,12 +19,7 @@ export async function GET(
 
             // Helper function to fetch latest attendees
             const fetchAttendees = async () => {
-                const { data } = await supabase
-                    .from('attendees')
-                    .select('*')
-                    .eq('session_id', params.id)
-                    .order('marked_at', { ascending: false });
-                return data || [];
+                return await getAttendeesBySession(id);
             };
 
             // Send initial attendees

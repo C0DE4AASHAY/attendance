@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     // Note: The frontend page `attend/[id]/page.tsx` now calls the Express external API directly.
     // This route is kept only as a fallback proxy if needed, but we pass it strictly to the new Secure API.
     try {
+        const { id } = await params;
         const { studentName, studentId, deviceFingerprint } = await request.json();
         const API_URL = process.env.NEXT_PUBLIC_SECURE_API_URL || 'http://localhost:5000';
 
@@ -16,7 +17,7 @@ export async function POST(
             body: JSON.stringify({
                 studentName,
                 studentId,
-                sessionId: params.id,
+                sessionId: id,
                 deviceFingerprint: deviceFingerprint || 'Unknown'
             })
         });

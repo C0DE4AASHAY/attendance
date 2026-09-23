@@ -7,8 +7,14 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
-    const session = await getSessionById(id);
+    let session = await getSessionById(id);
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+
+    // Auto-expire: if the session has passed its expiry time, mark it as expired
+    if (session.status === 'active' && session.expires_at && new Date() > new Date(session.expires_at)) {
+        await updateSessionStatus(id, 'expired');
+        session = { ...session, status: 'expired' };
+    }
 
     const attendeesList = await getAttendeesBySession(id);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import QRCode from 'qrcode';
@@ -29,7 +29,6 @@ export default function SessionDetailPage() {
     const [loading, setLoading] = useState(true);
     const [qrDataUrl, setQrDataUrl] = useState('');
     const [copied, setCopied] = useState(false);
-    const eventSourceRef = useRef<EventSource | null>(null);
     const router = useRouter();
 
     const attendLink = typeof window !== 'undefined'
@@ -42,7 +41,7 @@ export default function SessionDetailPage() {
             if (!res.ok) { router.push('/dashboard'); return; }
             const data = await res.json();
             setSession(data.session);
-            setAttendees(data.attendees);
+            setAttendees(data.attendees || []);
         } catch {
             router.push('/dashboard');
         } finally {
@@ -50,6 +49,7 @@ export default function SessionDetailPage() {
         }
     }, [sessionId, router]);
 
+    // Initial fetch
     useEffect(() => {
         fetchSession();
     }, [fetchSession]);
@@ -65,25 +65,23 @@ export default function SessionDetailPage() {
         }
     }, [attendLink]);
 
-    // SSE for real-time updates
+    // Poll for live attendee updates every 5 seconds (replaces SSE which breaks on Vercel serverless)
     useEffect(() => {
         if (!sessionId) return;
 
-        const es = new EventSource(`/api/sessions/${sessionId}/stream`);
-        eventSourceRef.current = es;
-
-        es.onmessage = (event) => {
+        const interval = setInterval(async () => {
             try {
-                const data = JSON.parse(event.data);
-                if (data.attendees) {
-                    setAttendees(data.attendees);
+                const res = await fetch(`/api/sessions/${sessionId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setAttendees(data.attendees || []);
+                    // Also update session status (e.g. if auto-expired)
+                    if (data.session) setSession(data.session);
                 }
-            } catch { }
-        };
+            } catch { /* ignore polling errors */ }
+        }, 5000);
 
-        return () => {
-            es.close();
-        };
+        return () => clearInterval(interval);
     }, [sessionId]);
 
     const handleCloseSession = async () => {
@@ -162,8 +160,8 @@ export default function SessionDetailPage() {
                                     fontWeight: 600,
                                     textTransform: 'uppercase',
                                     letterSpacing: '0.5px',
-                                    background: session.status === 'active' ? 'rgba(0, 212, 170, 0.15)' : 'rgba(255, 107, 107, 0.15)',
-                                    color: session.status === 'active' ? 'var(--accent-success)' : 'var(--accent-danger)',
+                                    background: session.status === 'active' ? 'rgba(0, 212, 170, 0.15)' : session.status === 'expired' ? 'rgba(255, 180, 50, 0.15)' : 'rgba(255, 107, 107, 0.15)',
+                                    color: session.status === 'active' ? 'var(--accent-success)' : session.status === 'expired' ? '#e6a817' : 'var(--accent-danger)',
                                 }}>
                                     {session.status}
                                 </span>
@@ -172,7 +170,7 @@ export default function SessionDetailPage() {
                                 </span>
                                 {session.expires_at && (
                                     <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                        Expires {new Date(session.expires_at).toLocaleString()}
+                                        {session.status === 'expired' ? 'Expired' : 'Expires'} {new Date(session.expires_at).toLocaleString()}
                                     </span>
                                 )}
                             </div>
